@@ -4,6 +4,8 @@
 /* The entire lower control panel accepts a new touch; active drags remain captured. */
 .controls{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;position:relative;isolation:isolate}.joy-ring{pointer-events:none;will-change:transform}.controls.steering .joy-ring{z-index:3;border-color:#b9dcffb3;box-shadow:inset 0 0 25px #0008,0 0 22px #71b5ff33}.controls.steering .joy-label{opacity:0}
 
-/* Bounded rubber-band travel and spring return; active dragging has no lag. */
-.joy-ring{transition:transform .14s cubic-bezier(.18,.9,.3,1.28)}#knob{transition:left .11s cubic-bezier(.18,.9,.3,1.28),top .11s cubic-bezier(.18,.9,.3,1.28)}.controls.steering .joy-ring,.controls.steering #knob{transition:none}@media(prefers-reduced-motion:reduce){.joy-ring,#knob{transition:none}}
+/* Smooth visual tracking only; game input remains immediate. */
+.joy-ring{transition:transform .24s cubic-bezier(.16,1,.3,1)}#knob{transition:left .2s cubic-bezier(.16,1,.3,1),top .2s cubic-bezier(.16,1,.3,1)}
+.controls.steering .joy-ring{transition:transform .08s cubic-bezier(.2,.75,.3,1)}.controls.steering #knob{transition:left .06s cubic-bezier(.2,.75,.3,1),top .06s cubic-bezier(.2,.75,.3,1)}
+@media(prefers-reduced-motion:reduce){.joy-ring,#knob,.controls.steering .joy-ring,.controls.steering #knob{transition:none}}
 body{overflow-x:hidden}
