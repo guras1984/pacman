@@ -6,8 +6,8 @@ const N=20,T=30,DIRS=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}],COLORS=['#ff657
 const ORIGINAL=[
 '11111111111111111111','13000000011000000031','10110111011011101101','10110111011011101101','10000000000000000001','10110101111110101101','10000100011000100001','11110111211211101111','22210122222222101222','11110121199112101111','22220221999912202222','11110121111112101111','22210122222222101222','11110121111112101111','13000000011000000031','10110111011011101101','10010000022000001001','11010101111110101011','10000100011000100001','11111111111111111111'].map(r=>[...r].map(Number));
 let map,score=0,best=0,lives=3,stage=1,difficulty='normal',mode='menu',pac,ghosts=[],remaining=0,total=0,power=0,combo=0,elapsed=0,invincible=0,particles=[],fruit=null,fruitSpawned=false,toastTime=0,ready=0;
-let audio=null,soundOn=false,joyPointer=null,held=null,primaryAction=null,last=0,accumulator=0;
-try{best=Number(localStorage.getItem('pacman-neon-best'))||0}catch{}
+let audio=null,soundOn=true,joyPointer=null,held=null,primaryAction=null,last=0,accumulator=0;
+try{best=Number(localStorage.getItem('pacman-neon-best'))||0;soundOn=localStorage.getItem('pacman-neon-sound')!=='off'}catch{}
 const settings={easy:{p:6.2,g:4.1,power:9},normal:{p:6.5,g:4.9,power:7},hard:{p:6.8,g:5.7,power:5}};
 const wrap=x=>(x+N)%N;
 function walk(x,y,actor='pac'){if(y<0||y>=N)return false;if(x<0||x>=N){if(y!==10)return false;x=wrap(x)}return map[y][x]!==1&&(actor==='ghost'||map[y][x]!==9)}
@@ -17,15 +17,36 @@ function resetPositions(){pac=entity(9,16,'pac');pac.wanted=null;ghosts=COLORS.m
 function newStage(){map=ORIGINAL.map(r=>r.slice());if(stage%2===0)map=map.map(r=>r.slice().reverse());remaining=map.flat().filter(v=>v===0||v===3).length;total=remaining;particles=[];fruit=null;fruitSpawned=false;elapsed=0;resetPositions();hud()}
 function addScore(n){score+=n;if(score>best){best=score;try{localStorage.setItem('pacman-neon-best',String(best))}catch{}}hud()}
 function hud(){$('score').textContent=String(score).padStart(5,'0');$('best').textContent=String(best).padStart(5,'0');$('lives').textContent='● '.repeat(Math.max(0,lives));$('stage').textContent=String(stage).padStart(2,'0');$('remaining').textContent=`${remaining} DOTS LEFT`;$('progress').style.width=`${100*(1-remaining/total)}%`}
-function show(title,message,button,action,secondary=false){$('title').textContent=title;$('message').textContent=message;$('primary').textContent=button;primaryAction=action;$('overlay').classList.remove('hidden');$('difficulty').hidden=mode!=='menu';$('secondary').hidden=!secondary;$('eyebrow').textContent=mode==='menu'?'THE MAZE IS CALLING':mode==='clear'?'MAZE COMPLETE':mode==='over'?'ONE MORE RUN?':'TAKE A BREATHER'}
-function start(){score=0;lives=3;stage=1;newStage();mode='play';$('overlay').classList.add('hidden');unlockAudio();toast('READY! 조이스틱을 밀어 출발하세요')}
+function show(title,message,button,action,secondary=false){stopMusic();$('title').textContent=title;$('message').textContent=message;$('primary').textContent=button;primaryAction=action;$('overlay').classList.remove('hidden');$('difficulty').hidden=mode!=='menu';$('secondary').hidden=!secondary;$('eyebrow').textContent=mode==='menu'?'THE MAZE IS CALLING':mode==='clear'?'MAZE COMPLETE':mode==='over'?'ONE MORE RUN?':'TAKE A BREATHER'}
+function start(){stopMusic();musicStep=0;score=0;lives=3;stage=1;newStage();mode='play';$('overlay').classList.add('hidden');unlockAudio();toast('READY! 조이스틱을 밀어 출발하세요')}
 function menu(){mode='menu';newStage();show('한 입 더, 한 칸 더.','빛나는 미로를 달리고 유령을 따돌리세요. 조이스틱 하나면 충분합니다.','게임 시작 →',start)}
-function pause(){if(mode!=='play')return;mode='pause';resetJoystick();held=null;show('잠시 쉬어가세요.','미로는 그대로 기다리고 있어요.','계속하기 →',()=>{mode='play';last=performance.now();$('overlay').classList.add('hidden')},true)}
+function pause(){if(mode!=='play')return;mode='pause';resetJoystick();held=null;show('잠시 쉬어가세요.','미로는 그대로 기다리고 있어요.','계속하기 →',()=>{mode='play';unlockAudio();last=performance.now();$('overlay').classList.add('hidden')},true)}
 $('primary').onclick=()=>primaryAction?.();$('secondary').onclick=menu;$('pause').onclick=()=>{if(mode==='play')pause();else if(mode==='pause')primaryAction()};
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{difficulty=b.dataset.level;document.querySelectorAll('[data-level]').forEach(el=>el.classList.toggle('selected',el===b))});
-function unlockAudio(){if(!soundOn)return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume()}catch{}}
-function tone(freq=500,duration=.05){if(!soundOn||!audio)return;try{const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audio.currentTime);o.frequency.exponentialRampToValueAtTime(freq*.6,audio.currentTime+duration);g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration)}catch{}}
-$('sound').onclick=()=>{soundOn=!soundOn;$('sound').setAttribute('aria-pressed',String(soundOn));$('sound').setAttribute('aria-label',soundOn?'소리 끄기':'소리 켜기');$('sound').textContent=soundOn?'♫':'♪';unlockAudio();tone(700)};
+// Original four-bar chiptune: lead, offbeat arpeggio, bass and synthesized drums.
+// Audio is created only after a user gesture; no audio files or network requests.
+let musicBus=null,musicNext=0,musicStep=0,musicRunning=false;
+const musicVoices=new Set();
+const melody=[
+76,null,79,83,81,null,79,76,74,null,76,79,83,null,81,79,
+72,null,76,79,81,null,79,76,74,null,72,71,72,null,74,null,
+69,null,72,76,79,null,76,72,71,null,74,77,79,null,77,74,
+71,null,75,78,83,null,81,78,75,null,78,81,83,null,78,75];
+const roots=[40,36,33,35],chords=[[64,67,71],[60,64,67],[57,60,64],[59,63,66]];
+function syncSoundButton(){const b=$('sound');b.setAttribute('aria-pressed',String(soundOn));b.setAttribute('aria-label',soundOn?'음악과 효과음 끄기':'음악과 효과음 켜기');b.title=soundOn?'음악 · 효과음 ON':'음악 · 효과음 OFF';b.textContent=soundOn?'♫':'♪'}
+function unlockAudio(){if(!soundOn)return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();if(!musicBus){musicBus=audio.createGain();musicBus.gain.value=.55;musicBus.connect(audio.destination)}const res=audio.resume();if(res?.catch)res.catch(()=>{});musicTick()}catch{}}
+function note(midi,time,duration,volume,type='square',endMidi=null){if(midi===null)return;const o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.setValueAtTime(440*2**((midi-69)/12),time);if(endMidi!==null)o.frequency.exponentialRampToValueAtTime(440*2**((endMidi-69)/12),time+duration);g.gain.setValueAtTime(.0001,time);g.gain.linearRampToValueAtTime(volume,time+.006);g.gain.exponentialRampToValueAtTime(.0001,time+duration);o.connect(g);g.connect(musicBus);musicVoices.add(o);o.onended=()=>{musicVoices.delete(o);o.disconnect();g.disconnect()};o.start(time);o.stop(time+duration+.01)}
+function stopMusic(){musicRunning=false;musicNext=0;for(const o of musicVoices){try{o.stop();o.disconnect()}catch{}}musicVoices.clear()}
+function musicTick(){if(!soundOn||mode!=='play'||document.hidden||!audio||audio.state!=='running'){if(musicRunning)stopMusic();return}const now=audio.currentTime;if(!musicRunning){musicRunning=true;musicNext=now+.025}if(musicNext<now)musicNext=now+.025;while(musicNext<now+.12){const step=musicStep%64,bar=Math.floor(step/16),beat=step%16,energized=power>0,transpose=energized?12:0,tempo=energized?152:132,duration=60/tempo/4;
+note(melody[step]===null?null:melody[step]+transpose,musicNext,duration*1.5,.045,'square');
+if(beat%2===0)note(roots[bar]+(beat%8===6?12:0),musicNext,duration*1.7,.13,'triangle');
+if(beat%2===1)note(chords[bar][Math.floor(beat/2)%3]+12,musicNext,duration*.65,.025,'triangle');
+if(beat%4===0)note(43,musicNext,.11,.17,'sine',22);
+if(beat%4===2)note(energized?104:98,musicNext,.035,.013,'square',75);
+musicStep++;musicNext+=duration}}
+function tone(freq=500,duration=.05){if(!soundOn||!audio)return;try{const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audio.currentTime);o.frequency.exponentialRampToValueAtTime(freq*.6,audio.currentTime+duration);g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.onended=()=>{o.disconnect();g.disconnect()};o.start();o.stop(audio.currentTime+duration)}catch{}}
+$('sound').onclick=()=>{soundOn=!soundOn;try{localStorage.setItem('pacman-neon-sound',soundOn?'on':'off')}catch{}syncSoundButton();if(soundOn){unlockAudio();tone(700)}else stopMusic()};
+syncSoundButton();
 function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastTime=2}
 function burst(x,y,color,count=9){for(let i=0;i<count;i++){let a=Math.random()*Math.PI*2;particles.push({x:(x+.5)*T,y:(y+.5)*T,vx:Math.cos(a)*(25+Math.random()*65),vy:Math.sin(a)*(25+Math.random()*65),life:.55,color})}}
 function position(a){let dx=a.toX-a.fromX;if(dx>N/2)dx-=N;if(dx<-N/2)dx+=N;return{x:a.moving?a.fromX+dx*a.progress:a.x,y:a.moving?a.fromY+(a.toY-a.fromY)*a.progress:a.y}}
@@ -59,6 +80,6 @@ const joy=$('joystick'),knob=$('knob');function resetJoystick(){joyPointer=null;
 function updateJoystick(e){const r=joy.querySelector('.joy-ring').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,limit=r.width*.29,length=Math.hypot(dx,dy),scale=Math.min(1,limit/(length||1));knob.style.left=`calc(50% + ${dx*scale}px)`;knob.style.top=`calc(50% + ${dy*scale}px)`;if(length<limit*.2){held=null;return}held=Math.abs(dx)>Math.abs(dy)?dx>0?0:2:dy>0?1:3;input(held)}
 joy.addEventListener('pointerdown',e=>{if(joyPointer!==null||mode!=='play')return;e.preventDefault();unlockAudio();joyPointer=e.pointerId;joy.setPointerCapture(e.pointerId);updateJoystick(e)});joy.addEventListener('pointermove',e=>{if(e.pointerId===joyPointer)updateJoystick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])joy.addEventListener(ev,e=>{if(e.pointerId===joyPointer)resetJoystick()});
 const keys={ArrowRight:0,KeyD:0,ArrowDown:1,KeyS:1,ArrowLeft:2,KeyA:2,ArrowUp:3,KeyW:3};window.addEventListener('keydown',e=>{if(e.target.matches('input,textarea,select'))return;if(e.code in keys){e.preventDefault();held=keys[e.code];input(held)}if(e.code==='Escape'&&!e.repeat){if(mode==='play')pause();else if(mode==='pause')primaryAction()}});window.addEventListener('keyup',e=>{if(e.code in keys&&held===keys[e.code])held=null});window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});
-function frame(now){if(!last)last=now;accumulator+=Math.min((now-last)/1000,.1);last=now;while(accumulator>=1/120){update(1/120);accumulator-=1/120}draw(now/1000);requestAnimationFrame(frame)}
+function frame(now){musicTick();if(!last)last=now;accumulator+=Math.min((now-last)/1000,.1);last=now;while(accumulator>=1/120){update(1/120);accumulator-=1/120}draw(now/1000);requestAnimationFrame(frame)}
 menu();requestAnimationFrame(frame);
 })();
