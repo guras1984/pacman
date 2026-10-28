@@ -81,15 +81,16 @@ if(fruit){const x=(fruit.x+.5)*T,y=(fruit.y+.5)*T;ctx.strokeStyle='#92d58e';ctx.
 let p=position(pac);ctx.globalAlpha=invincible>0&&mode==='play'&&Math.floor(t*9)%2?.45:1;drawPac((p.x+.5)*T,(p.y+.5)*T,t);if(p.x<0)drawPac((p.x+N+.5)*T,(p.y+.5)*T,t);if(p.x>N-1)drawPac((p.x-N+.5)*T,(p.y+.5)*T,t);ctx.globalAlpha=1;
 for(const g of ghosts){let q=position(g);drawGhost(g,(q.x+.5)*T,(q.y+.5)*T,t);if(q.x<0)drawGhost(g,(q.x+N+.5)*T,(q.y+.5)*T,t);if(q.x>N-1)drawGhost(g,(q.x-N+.5)*T,(q.y+.5)*T,t)}for(const part of particles){ctx.globalAlpha=Math.max(0,part.life/.55);ctx.fillStyle=part.color;ctx.beginPath();ctx.arc(part.x,part.y,2.3,0,7);ctx.fill()}ctx.globalAlpha=1;if(ready>0&&mode==='play'){ctx.fillStyle='#ffe26b';ctx.font='bold 26px system-ui';ctx.textAlign='center';ctx.shadowColor='#000';ctx.shadowBlur=8;ctx.fillText('READY!',300,365);ctx.shadowBlur=0}}
 const joy=$('joystick'),knob=$('knob'),joyRing=joy.querySelector('.joy-ring'),controlArea=joy.closest('.controls');
-let joyBase=null,joyHome=null,joyLimit=0,joyDirection=null;
-function resetJoystick(){const pointer=joyPointer;joyPointer=null;held=null;joyDirection=null;joyBase=null;joyHome=null;knob.style.left='50%';knob.style.top='50%';joyRing.style.transform='';controlArea.classList.remove('steering');if(pointer!==null&&controlArea.hasPointerCapture(pointer))controlArea.releasePointerCapture(pointer)}
-function beginJoystick(e){if(joyPointer!==null||mode!=='play'||e.isPrimary===false||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();unlockAudio();const r=joyRing.getBoundingClientRect();joyHome={x:r.left+r.width/2,y:r.top+r.height/2};joyLimit=r.width*.29;const distance=Math.hypot(e.clientX-joyHome.x,e.clientY-joyHome.y);
+let joyBase=null,joyHome=null,joyLimit=0,joyDirection=null,joyTravel=0,joyVisual={x:0,y:0};
+function resetJoystick(){const pointer=joyPointer;joyPointer=null;held=null;joyDirection=null;joyBase=null;joyHome=null;joyVisual={x:0,y:0};controlArea.classList.remove('steering');knob.style.left='50%';knob.style.top='50%';joyRing.style.transform='';controlArea.classList.remove('steering');if(pointer!==null&&controlArea.hasPointerCapture(pointer))controlArea.releasePointerCapture(pointer)}
+function beginJoystick(e){if(joyPointer!==null||mode!=='play'||e.isPrimary===false||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();unlockAudio();const r=joyRing.getBoundingClientRect(),home=joy.getBoundingClientRect();joyHome={x:home.left+home.width/2,y:home.top+home.height/2};joyLimit=r.width*.29;joyTravel=Math.min(36,r.width*.28);const distance=Math.hypot(e.clientX-joyHome.x,e.clientY-joyHome.y);
 // A touch near the ring keeps familiar tap-to-steer. Elsewhere, spawn under the finger.
 joyBase=distance<=r.width/2+12?{...joyHome}:{x:e.clientX,y:e.clientY};joyPointer=e.pointerId;joyDirection=null;controlArea.setPointerCapture(e.pointerId);controlArea.classList.add('steering');updateJoystick(e)}
 function updateJoystick(e){if(!joyBase||e.pointerId!==joyPointer)return;e.preventDefault();let dx=e.clientX-joyBase.x,dy=e.clientY-joyBase.y,length=Math.hypot(dx,dy);
 // Follow excess travel, keeping the same direction even far outside the visual ring.
 if(length>joyLimit){joyBase.x=e.clientX-dx/length*joyLimit;joyBase.y=e.clientY-dy/length*joyLimit;dx=e.clientX-joyBase.x;dy=e.clientY-joyBase.y;length=joyLimit}
-joyRing.style.transform=`translate(${joyBase.x-joyHome.x}px, ${joyBase.y-joyHome.y}px)`;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`;
+// Render the base through a bounded rubber-band curve; logical tracking stays responsive.
+const bx=joyBase.x-joyHome.x,by=joyBase.y-joyHome.y,stretch=Math.hypot(bx,by),elastic=stretch?joyTravel*(1-Math.exp(-stretch/joyTravel))/stretch:0;joyVisual={x:bx*elastic,y:by*elastic};joyRing.style.transform=`translate(${joyVisual.x}px, ${joyVisual.y}px)`;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`;
 if(length<joyLimit*.18){held=null;return}
 let direction=Math.abs(dx)>Math.abs(dy)?dx>0?0:2:dy>0?1:3;
 // A small diagonal tolerance prevents direction chatter when a thumb drifts.
