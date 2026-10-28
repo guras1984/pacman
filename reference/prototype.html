@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Modern Neon Pac-Man</title>
+    <style>
+        body {
+            background-color: #050505;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .game-container {
+            text-align: center;
+            border: 2px solid #1919a6;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(25, 25, 166, 0.4);
+            background: rgba(0, 0, 0, 0.8);
+        }
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .score-box { color: #ffff00; }
+        .lives-box { color: #ff4444; }
+        
+        canvas {
+            border: 2px solid #333;
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+        }
+        .control-panel {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        button {
+            background-color: #1919a6;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #3333cc; }
+        button.active { background-color: #ffb8ae; color: #000; }
+        .footer-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="header-panel">
+        <div>SCORE: <span id="score" class="score-box">0</span></div>
+        <div>LIVES: <span id="lives" class="lives-box">♥♥♥</span></div>
+    </div>
+
+    <canvas id="canvas" width="400" height="400"></canvas>
+
+    <div class="control-panel">
+        <span style="line-height: 30px; font-size: 14px; margin-right: 5px;">난이도:</span>
+        <button id="btn-easy" onclick="setDifficulty('easy')">EASY</button>
+        <button id="btn-normal" class="active" onclick="setDifficulty('normal')">NORMAL</button>
+        <button id="btn-hard" onclick="setDifficulty('hard')">HARD</button>
+    </div>
+
+    <div class="footer-info">방향키(← → ↑ ↓)로 조작 | 모든 도트를 먹으면 승리!</div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_SIZE = 20;
+const MAP_SIZE = 20;
+
+// 0: 도트, 1: 벽, 2: 빈 공간, 3: 파워 펠렛
+const originalMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,3,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,3,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,0,1],
+    [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
+    [1,1,1,1,0,1,1,1,2,1,1,2,1,1,1,0,1,1,1,1],
+    [2,2,2,1,0,1,2,2,2,2,2,2,2,2,1,0,1,2,2,2],
+    [1,1,1,1,0,1,2,1,1,9,9,1,1,2,1,0,1,1,1,1],
+    [2,2,2,2,0,2,2,1,9,9,9,9,1,2,2,0,2,2,2,2],
+    [1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1],
+    [2,2,2,1,0,1,2,2,2,2,2,2,2,2,1,0,1,2,2,2],
+    [1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1],
+    [1,3,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,3,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+    [1,0,0,1,0,0,0,0,0,2,2,0,0,0,0,0,1,0,0,1],
+    [1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1],
+    [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+let map = JSON.parse(JSON.stringify(originalMap));
+let score = 0;
+let lives = 3;
+let difficulty = 'normal';
+
+// 난이도별 설정 (유령 이동 주기 틱)
+const difficultySettings = {
+    easy: { ghostSpeed: 14, pacmanSpeed: 8 },
+    normal: { ghostSpeed: 10, pacmanSpeed: 8 },
+    hard: { ghostSpeed: 7, pacmanSpeed: 7 }
+};
+
+let pacman = { x: 9, y: 16, dx: 0, dy: 0, nextDx: 0, nextDy: 0 };
+
+// 유령 4마리 (빨강, 분홍, 파랑, 주황)
+let ghosts = [
+    { x: 9, y: 9, dx: 0, dy: -1, color: '#ff0000' }, // Blinky
+    { x: 10, y: 10, dx: -1, dy: 0, color: '#ffb8ff' }, // Pinky
+    { x: 9, y: 10, dx: 1, dy: 0, color: '#00ffff' }, // Inky
+    { x: 10, y: 9, dx: 0, dy: 1, color: '#ffb852' }  // Clyde
+];
+
+function setDifficulty(level) {
+    difficulty = level;
+    document.querySelectorAll('.control-panel button').forEach(b => b.classList.remove('active'));
+    document.getElementById(`btn-${level}`).classList.add('active');
+    resetPositions();
+}
+
+function resetPositions() {
+    pacman = { x: 9, y: 16, dx: 0, dy: 0, nextDx: 0, nextDy: 0 };
+    ghosts = [
+        { x: 9, y: 9, dx: 0, dy: -1, color: '#ff0000' },
+        { x: 10, y: 10, dx: -1, dy: 0, color: '#ffb8ff' },
+        { x: 9, y: 10, dx: 1, dy: 0, color: '#00ffff' },
+        { x: 10, y: 9, dx: 0, dy: 1, color: '#ffb852' }
+    ];
+}
+
+window.addEventListener('keydown', e => {
+    switch(e.key) {
+        case 'ArrowUp': pacman.nextDx = 0; pacman.nextDy = -1; break;
+        case 'ArrowDown': pacman.nextDx = 0; pacman.nextDy = 1; break;
+        case 'ArrowLeft': pacman.nextDx = -1; pacman.nextDy = 0; break;
+        case 'ArrowRight': pacman.nextDx = 1; pacman.nextDy = 0; break;
+    }
+});
+
+function canMove(x, y, dx, dy) {
+    let nx = x + dx;
+    let ny = y + dy;
+    if (nx < 0 || nx >= MAP_SIZE) return true; // 터널 통과
+    if (ny < 0 || ny >= MAP_SIZE) return false;
+    return map[ny][nx] !== 1;
+}
+
+let frameCount = 0;
+function update() {
+    frameCount++;
+    let settings = difficultySettings[difficulty];
+
+    // 팩맨 이동 처리
+    if (frameCount % settings.pacmanSpeed === 0) {
+        if (canMove(pacman.x, pacman.y, pacman.nextDx, pacman.nextDy)) {
+            pacman.dx = pacman.nextDx;
+            pacman.dy = pacman.nextDy;
+        }
+        if (canMove(pacman.x, pacman.y, pacman.dx, pacman.dy)) {
+            pacman.x += pacman.dx;
+            pacman.y += pacman.dy;
+
+            if (pacman.x < 0) pacman.x = MAP_SIZE - 1;
+            if (pacman.x >= MAP_SIZE) pacman.x = 0;
+
+            // 도트 먹기
+            if (map[pacman.y][pacman.x] === 0) {
+                map[pacman.y][pacman.x] = 2;
+                score += 10;
+            } else if (map[pacman.y][pacman.x] === 3) {
+                map[pacman.y][pacman.x] = 2;
+                score += 50; // 파워 펠렛
+            }
+            document.getElementById('score').innerText = score;
+        }
+    }
+
+    // 유령 이동 처리 (AI)
+    if (frameCount % settings.ghostSpeed === 0) {
+        ghosts.forEach(g => {
+            let directions = [
+                {dx: 0, dy: -1}, {dx: 0, dy: 1}, {dx: -1, dy: 0}, {dx: 1, dy: 0}
+            ];
+            // 역방향 제외하고 갈 수 있는 길 필터링
+            let validMoves = directions.filter(d => 
+                !(d.dx === -g.dx && d.dy === -g.dy) && canMove(g.x, g.y, d.dx, d.dy)
+            );
+            if (validMoves.length === 0) validMoves = [{dx: -g.dx, dy: -g.dy}];
+
+            // 난이도별 AI 성향 (Hard는 팩맨 방향 우선 추적, Easy/Normal은 랜덤 혼합)
+            let chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+            if (difficulty === 'hard') {
+                // 팩맨 위치를 조금 더 적극적으로 의식하는 로직
+                let target = validMoves.reduce((best, d) => {
+                    let dist = Math.pow((g.x + d.dx) - pacman.x, 2) + Math.pow((g.y + d.dy) - pacman.y, 2);
+                    let bestDist = Math.pow((g.x + best.dx) - pacman.x, 2) + Math.pow((g.y + best.dy) - pacman.y, 2);
+                    return dist < bestDist ? d : best;
+                }, validMoves[0]);
+                chosenMove = target;
+            }
+
+            g.dx = chosenMove.dx;
+            g.dy = chosenMove.dy;
+            g.x += g.dx;
+            g.y += g.dy;
+
+            if (g.x < 0) g.x = MAP_SIZE - 1;
+            if (g.x >= MAP_SIZE) g.x = 0;
+
+            // 충돌 체크 (팩맨과 유령)
+            if (g.x === pacman.x && g.y === pacman.y) {
+                lives--;
+                let hearts = '';
+                for(let i=0; i<lives; i++) hearts += '♥';
+                document.getElementById('lives').innerText = hearts;
+                if (lives <= 0) {
+                    alert('GAME OVER! 점수: ' + score);
+                    resetGame();
+                } else {
+                    resetPositions();
+                }
+            }
+        });
+    }
+}
+
+function resetGame() {
+    map = JSON.parse(JSON.stringify(originalMap));
+    score = 0;
+    lives = 3;
+    document.getElementById('score').innerText = score;
+    document.getElementById('lives').innerText = '♥♥♥';
+    resetPositions();
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 맵 렌더링 (네온 효과)
+    for (let r = 0; r < map.length; r++) {
+        for (let c = 0; c < map[r].length; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = '#1919a6';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#1919a6';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.shadowBlur = 0; // 초기화
+            } else if (map[r][c] === 0) {
+                ctx.fillStyle = '#ffb8ae';
+                ctx.beginPath();
+                ctx.arc(c * TILE_SIZE + TILE_SIZE/2, r * TILE_SIZE + TILE_SIZE/2, 3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (map[r][c] === 3) {
+                ctx.fillStyle = '#ffff00';
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(c * TILE_SIZE + TILE_SIZE/2, r * TILE_SIZE + TILE_SIZE/2, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+    }
+
+    // 팩맨 그리기 (노란색 네온 원)
+    ctx.fillStyle = 'yellow';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'yellow';
+    ctx.beginPath();
+    ctx.arc(
+        pacman.x * TILE_SIZE + TILE_SIZE/2, 
+        pacman.y * TILE_SIZE + TILE_SIZE/2, 
+        TILE_SIZE/2 - 2, 
+        0, Math.PI * 2
+    );
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // 유령 그리기
+    ghosts.forEach(g => {
+        ctx.fillStyle = g.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = g.color;
+        ctx.beginPath();
+        ctx.arc(
+            g.x * TILE_SIZE + TILE_SIZE/2, 
+            g.y * TILE_SIZE + TILE_SIZE/2, 
+            TILE_SIZE/2 - 2, 
+            0, Math.PI * 2
+        );
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    });
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
