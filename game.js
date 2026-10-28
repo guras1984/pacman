@@ -90,7 +90,7 @@ function updateJoystick(e){if(!joyBase||e.pointerId!==joyPointer)return;e.preven
 // Follow excess travel, keeping the same direction even far outside the visual ring.
 if(length>joyLimit){joyBase.x=e.clientX-dx/length*joyLimit;joyBase.y=e.clientY-dy/length*joyLimit;dx=e.clientX-joyBase.x;dy=e.clientY-joyBase.y;length=joyLimit}
 // Render the base through a bounded rubber-band curve; logical tracking stays responsive.
-const bx=joyBase.x-joyHome.x,by=joyBase.y-joyHome.y,stretch=Math.hypot(bx,by),elastic=stretch?joyTravel*(1-Math.exp(-stretch/joyTravel))/stretch:0;joyVisual={x:bx*elastic,y:by*elastic};joyRing.style.transform=`translate(${joyVisual.x}px, ${joyVisual.y}px)`;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`;
+const bx=joyBase.x-joyHome.x,by=joyBase.y-joyHome.y,stretch=Math.hypot(bx,by),elastic=stretch?joyTravel*(1-Math.exp(-stretch/(joyTravel*3)))/stretch:0;joyVisual={x:bx*elastic,y:by*elastic};joyRing.style.transform=`translate(${joyVisual.x}px, ${joyVisual.y}px)`;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`;
 if(length<joyLimit*.18){held=null;return}
 let direction=Math.abs(dx)>Math.abs(dy)?dx>0?0:2:dy>0?1:3;
 // A small diagonal tolerance prevents direction chatter when a thumb drifts.
