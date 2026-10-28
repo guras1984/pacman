@@ -80,9 +80,26 @@ ctx.strokeStyle='#ffb3d5';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(9*T+3,9*T+2
 if(fruit){const x=(fruit.x+.5)*T,y=(fruit.y+.5)*T;ctx.strokeStyle='#92d58e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-4,y);ctx.quadraticCurveTo(x,y-14,x+8,y-9);ctx.lineTo(x+4,y);ctx.stroke();ctx.fillStyle='#ff557c';for(const dx of [-4,5]){ctx.beginPath();ctx.arc(x+dx,y+3,5,0,7);ctx.fill()}}
 let p=position(pac);ctx.globalAlpha=invincible>0&&mode==='play'&&Math.floor(t*9)%2?.45:1;drawPac((p.x+.5)*T,(p.y+.5)*T,t);if(p.x<0)drawPac((p.x+N+.5)*T,(p.y+.5)*T,t);if(p.x>N-1)drawPac((p.x-N+.5)*T,(p.y+.5)*T,t);ctx.globalAlpha=1;
 for(const g of ghosts){let q=position(g);drawGhost(g,(q.x+.5)*T,(q.y+.5)*T,t);if(q.x<0)drawGhost(g,(q.x+N+.5)*T,(q.y+.5)*T,t);if(q.x>N-1)drawGhost(g,(q.x-N+.5)*T,(q.y+.5)*T,t)}for(const part of particles){ctx.globalAlpha=Math.max(0,part.life/.55);ctx.fillStyle=part.color;ctx.beginPath();ctx.arc(part.x,part.y,2.3,0,7);ctx.fill()}ctx.globalAlpha=1;if(ready>0&&mode==='play'){ctx.fillStyle='#ffe26b';ctx.font='bold 26px system-ui';ctx.textAlign='center';ctx.shadowColor='#000';ctx.shadowBlur=8;ctx.fillText('READY!',300,365);ctx.shadowBlur=0}}
-const joy=$('joystick'),knob=$('knob');function resetJoystick(){joyPointer=null;held=null;knob.style.left='50%';knob.style.top='50%'}
-function updateJoystick(e){const r=joy.querySelector('.joy-ring').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,limit=r.width*.29,length=Math.hypot(dx,dy),scale=Math.min(1,limit/(length||1));knob.style.left=`calc(50% + ${dx*scale}px)`;knob.style.top=`calc(50% + ${dy*scale}px)`;if(length<limit*.2){held=null;return}held=Math.abs(dx)>Math.abs(dy)?dx>0?0:2:dy>0?1:3;input(held)}
-joy.addEventListener('pointerdown',e=>{if(joyPointer!==null||mode!=='play')return;e.preventDefault();unlockAudio();joyPointer=e.pointerId;joy.setPointerCapture(e.pointerId);updateJoystick(e)});joy.addEventListener('pointermove',e=>{if(e.pointerId===joyPointer)updateJoystick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])joy.addEventListener(ev,e=>{if(e.pointerId===joyPointer)resetJoystick()});
+const joy=$('joystick'),knob=$('knob'),joyRing=joy.querySelector('.joy-ring'),controlArea=joy.closest('.controls');
+let joyBase=null,joyHome=null,joyLimit=0,joyDirection=null;
+function resetJoystick(){const pointer=joyPointer;joyPointer=null;held=null;joyDirection=null;joyBase=null;joyHome=null;knob.style.left='50%';knob.style.top='50%';joyRing.style.transform='';controlArea.classList.remove('steering');if(pointer!==null&&controlArea.hasPointerCapture(pointer))controlArea.releasePointerCapture(pointer)}
+function beginJoystick(e){if(joyPointer!==null||mode!=='play'||e.isPrimary===false||(e.pointerType==='mouse'&&e.button!==0))return;e.preventDefault();unlockAudio();const r=joyRing.getBoundingClientRect();joyHome={x:r.left+r.width/2,y:r.top+r.height/2};joyLimit=r.width*.29;const distance=Math.hypot(e.clientX-joyHome.x,e.clientY-joyHome.y);
+// A touch near the ring keeps familiar tap-to-steer. Elsewhere, spawn under the finger.
+joyBase=distance<=r.width/2+12?{...joyHome}:{x:e.clientX,y:e.clientY};joyPointer=e.pointerId;joyDirection=null;controlArea.setPointerCapture(e.pointerId);controlArea.classList.add('steering');updateJoystick(e)}
+function updateJoystick(e){if(!joyBase||e.pointerId!==joyPointer)return;e.preventDefault();let dx=e.clientX-joyBase.x,dy=e.clientY-joyBase.y,length=Math.hypot(dx,dy);
+// Follow excess travel, keeping the same direction even far outside the visual ring.
+if(length>joyLimit){joyBase.x=e.clientX-dx/length*joyLimit;joyBase.y=e.clientY-dy/length*joyLimit;dx=e.clientX-joyBase.x;dy=e.clientY-joyBase.y;length=joyLimit}
+joyRing.style.transform=`translate(${joyBase.x-joyHome.x}px, ${joyBase.y-joyHome.y}px)`;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`;
+if(length<joyLimit*.18){held=null;return}
+let direction=Math.abs(dx)>Math.abs(dy)?dx>0?0:2:dy>0?1:3;
+// A small diagonal tolerance prevents direction chatter when a thumb drifts.
+if(joyDirection!==null&&direction%2!==joyDirection%2){const along=joyDirection%2===0?Math.abs(dx):Math.abs(dy),across=joyDirection%2===0?Math.abs(dy):Math.abs(dx);if(across<along*1.2)direction=joyDirection}
+joyDirection=direction;held=direction;input(direction)}
+controlArea.addEventListener('pointerdown',beginJoystick);
+window.addEventListener('pointermove',e=>{if(e.pointerId===joyPointer)updateJoystick(e)},{passive:false});
+for(const ev of ['pointerup','pointercancel'])window.addEventListener(ev,e=>{if(e.pointerId===joyPointer)resetJoystick()});
+controlArea.addEventListener('lostpointercapture',e=>{if(e.pointerId===joyPointer)resetJoystick()});
+window.addEventListener('resize',resetJoystick);
 const keys={ArrowRight:0,KeyD:0,ArrowDown:1,KeyS:1,ArrowLeft:2,KeyA:2,ArrowUp:3,KeyW:3};window.addEventListener('keydown',e=>{if(e.target.matches('input,textarea,select'))return;if(e.code in keys){e.preventDefault();held=keys[e.code];input(held)}if(e.code==='Escape'&&!e.repeat){if(mode==='play')pause();else if(mode==='pause')primaryAction()}});window.addEventListener('keyup',e=>{if(e.code in keys&&held===keys[e.code])held=null});window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});
 function frame(now){musicTick();if(!last)last=now;accumulator+=Math.min((now-last)/1000,.1);last=now;while(accumulator>=1/120){update(1/120);accumulator-=1/120}draw(now/1000);requestAnimationFrame(frame)}
 menu();requestAnimationFrame(frame);
